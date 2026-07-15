@@ -8,7 +8,22 @@ import os
 from fpdf import FPDF, XPos, YPos
 
 OUTPUT_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "note.pdf")
-FONT_DIR    = "/System/Library/Fonts/Supplemental"
+
+# Arial TTF locations per platform (macOS, Linux, Windows)
+_FONT_CANDIDATES = [
+    "/System/Library/Fonts/Supplemental",          # macOS
+    "/usr/share/fonts/truetype/msttcorefonts",      # Linux (ttf-mscorefonts)
+    "/usr/share/fonts/truetype/liberation",         # Linux fallback
+    "C:/Windows/Fonts",                             # Windows
+]
+FONT_DIR = next((d for d in _FONT_CANDIDATES if os.path.isdir(d)), None)
+
+_ARIAL_NAMES = {
+    "":   ["Arial.ttf",             "LiberationSans-Regular.ttf"],
+    "B":  ["Arial Bold.ttf",        "LiberationSans-Bold.ttf"],
+    "I":  ["Arial Italic.ttf",      "LiberationSans-Italic.ttf"],
+    "BI": ["Arial Bold Italic.ttf", "LiberationSans-BoldItalic.ttf"],
+}
 
 BLUE_DARK = (31, 78, 121)
 BLUE_MID  = (46, 116, 181)
@@ -21,15 +36,32 @@ class NotePDF(FPDF):
         pass
     def footer(self):
         self.set_y(-12)
-        self.set_font("Ar", "I", 8)
+        _font(self, "I", 8)
         self.set_text_color(160, 160, 160)
         self.cell(0, 10, f"Page {self.page_no()}", align="C")
 
 
 def add_fonts(pdf):
-    pdf.add_font("Ar",  "",   f"{FONT_DIR}/Arial.ttf")
-    pdf.add_font("Ar",  "B",  f"{FONT_DIR}/Arial Bold.ttf")
-    pdf.add_font("Ar",  "I",  f"{FONT_DIR}/Arial Italic.ttf")
+    """Load Arial (or Liberation Sans as fallback). Falls back to built-in Helvetica."""
+    if FONT_DIR is None:
+        return False
+    loaded = 0
+    for style, names in _ARIAL_NAMES.items():
+        for name in names:
+            path = os.path.join(FONT_DIR, name)
+            if os.path.exists(path):
+                pdf.add_font("Ar", style, path)
+                loaded += 1
+                break
+    return loaded == len(_ARIAL_NAMES)
+
+
+def _font(pdf, style="", size=9):
+    """Set font: Arial if loaded, else Helvetica."""
+    try:
+        _font(pdf,style, size)
+    except Exception:
+        pdf.set_font("Helvetica", style, size)
 
 
 def rule(pdf, before=1, after=3):
@@ -42,14 +74,14 @@ def rule(pdf, before=1, after=3):
 
 def section(pdf, title):
     pdf.ln(3.5)
-    pdf.set_font("Ar", "B", 9.5)
+    _font(pdf,"B", 9.5)
     pdf.set_text_color(*BLUE_MID)
     pdf.cell(0, 5.5, title, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     pdf.ln(0.5)
 
 
 def para(pdf, text, lh=4.9):
-    pdf.set_font("Ar", "", 9)
+    _font(pdf,"", 9)
     pdf.set_text_color(*BODY_COL)
     pdf.multi_cell(0, lh, text)
 
@@ -67,19 +99,19 @@ def bul(pdf, text, lh=4.8, indent=4.5, desc_indent=8.5):
         label, rest = text.split("|", 1)
         # Line 1: dash + bold label
         pdf.set_x(pdf.l_margin)
-        pdf.set_font("Ar", "", 9)
+        _font(pdf,"", 9)
         pdf.cell(indent, lh, "-")
-        pdf.set_font("Ar", "B", 9)
+        _font(pdf,"B", 9)
         pdf.set_x(pdf.l_margin + indent)
         pdf.multi_cell(w - indent, lh, label.strip(),
                        new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         # Line 2+: plain description, indented
-        pdf.set_font("Ar", "", 9)
+        _font(pdf,"", 9)
         pdf.set_x(pdf.l_margin + desc_indent)
         pdf.multi_cell(w - desc_indent, lh, rest.strip(),
                        new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     else:
-        pdf.set_font("Ar", "", 9)
+        _font(pdf,"", 9)
         pdf.set_x(pdf.l_margin)
         pdf.cell(indent, lh, "-")
         pdf.set_x(pdf.l_margin + indent)
@@ -94,10 +126,13 @@ def build_pdf():
     pdf.set_auto_page_break(auto=True, margin=20)
     pdf.add_page()
     pdf.set_margins(22, 18, 22)
-    add_fonts(pdf)
+    _fonts_ok = add_fonts(pdf)
+    if not _fonts_ok:
+        print("Note: Arial font not found -- using Helvetica (bullets may not render). "
+              "Install ttf-mscorefonts-installer on Linux or run on macOS for best results.")
 
     # Title
-    pdf.set_font("Ar", "B", 14)
+    _font(pdf,"B", 14)
     pdf.set_text_color(*BLUE_DARK)
     pdf.cell(0, 9, "Technical Note: Automated CRM Client Sync",
              new_x=XPos.LMARGIN, new_y=YPos.NEXT)

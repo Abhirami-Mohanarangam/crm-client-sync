@@ -1,10 +1,32 @@
 # CRM Client Sync
 
-Automated pipeline that reads a daily client update CSV from an external provider
-and syncs it into a local SQLite database, replacing a manual copy-paste process.
+Automated pipeline that reads a daily client update CSV from an external provider,
+validates and cleans the data, and upserts records into a local SQLite database.
+Replaces a manual daily copy-paste process with a file watcher that triggers the
+sync automatically the moment a new CSV lands in the drop folder.
 
-Drop a CSV into the `watch/` folder and the watcher picks it up automatically.
-Or run the sync script directly against any CSV file.
+---
+
+## Quick start
+
+```bash
+git clone https://github.com/Abhirami-Mohanarangam/crm-client-sync.git
+cd crm-client-sync
+pip install -r requirements.txt
+
+# One-off sync against the included sample file
+python3 sync.py sample_data/client_updates_sample.csv
+
+# Automated mode -- drop any CSV into watch/ and it syncs automatically
+python3 watcher.py
+```
+
+After running `sync.py` you will have:
+- `crm.db` -- SQLite database with 10 cleaned client records
+- `sync_log.txt` -- timestamped log of every issue found and every action taken
+
+Open `crm.db` with [DB Browser for SQLite](https://sqlitebrowser.org) (free) to
+browse the data and the audit tables.
 
 ---
 
@@ -12,87 +34,67 @@ Or run the sync script directly against any CSV file.
 
 **watcher.py** monitors the `watch/` folder. When a CSV file lands there, it:
 
-1. Calls `sync.py` to validate, clean, and upsert the records into `crm.db`
+1. Calls `sync.py` to validate, clean, and upsert records into `crm.db`
 2. Moves the processed file to `archive/` with a timestamp so nothing is lost
 3. Logs everything to `watcher_log.txt`
 
-**sync.py** handles the data pipeline:
+**sync.py** is the core pipeline. For each run it:
 
-- Reads the CSV and validates column headers before touching the database
-- Deduplicates by `client_id` (keeps the most recently updated record)
-- Normalizes date formats to `YYYY-MM-DD`
-- Strips comma formatting from numeric fields
-- Validates email addresses (flags invalid ones, does not reject the row)
-- Normalizes UAE phone numbers to `+971 XX XXX XXXX`
-- Flags missing or suspicious values (missing phone, missing portfolio, negative portfolio)
-- Upserts into `crm.db` -- inserts new records, updates existing ones only if the incoming
-  data is newer
-- Records every issue in `sync_issues` and every run in `sync_runs` for a full audit trail
+- Validates column headers and aborts immediately if any are missing (guards against
+  silent format changes from the data provider)
+- Deduplicates by `client_id`, keeping the most recently updated record
+- Cleans and normalizes each field (see data issues below)
+- Upserts into `crm.db` inside a single transaction -- a mid-run crash rolls back
+  completely, leaving no partial data
+- Writes one row to `sync_runs` (run summary) and one row per issue to `sync_issues`
+  (client ID, row number, original value, what was done)
 
 ---
 
-## Data issues handled
+## Data issues in the sample file
 
-The sample file contained eight deliberate problems. The script detects and handles all of them:
+The sample CSV contained eight deliberate data quality problems. All are detected,
+cleaned where possible, and logged with full detail in `sync_issues`.
 
-| Issue | What happens |
-|-------|-------------|
-| Duplicate `client_id` | Keeps the row with the most recent `last_updated`; logs both |
-| Missing phone | Stored as `NULL`; logged as a warning |
-| Portfolio value with comma formatting (`"2,100,000"`) | Commas stripped; stored as numeric `2100000` |
-| Inconsistent date format (`DD/MM/YYYY`) | Normalized to `YYYY-MM-DD` |
-| Invalid email (missing TLD) | Stored with `email_valid=0`; flagged for follow-up |
-| Missing portfolio value | Stored as `NULL`; logged as a warning |
-| Negative portfolio value | Stored with `portfolio_flagged=1`; log notes that all other values are between 640,000 and 2,100,000 |
-| Inconsistent phone format (no spaces) | Normalized to `+971 XX XXX XXXX`; original kept in `phone_raw` |
+| Issue | Assumption | Action taken |
+|-------|-----------|-------------|
+| Duplicate `client_id` (1002 appears twice) | Same client re-sent with an update | Kept record with most recent `last_updated`; discarded the earlier one |
+| Missing phone (client 1003) | Value not provided; cannot be inferred | Stored `NULL`; logged for follow-up |
+| Portfolio value `"2,100,000"` (commas) | Display formatting leaked into the feed | Commas stripped; stored as numeric `2100000` |
+| Date `01/06/2026` (wrong format) | `DD/MM/YYYY` instead of `YYYY-MM-DD` | Parsed and normalized to `2026-06-01` |
+| Invalid email `mateo.garcia@example` | Missing TLD; correct domain unknown | Stored as-is with `email_valid=0`; flagged for manual correction |
+| Missing portfolio value (client 1007) | Value not provided; cannot be inferred | Stored `NULL`; logged for follow-up |
+| Negative portfolio `-50,000` (client 1009) | Manual entry error -- all other values are 640k-2.1M; a negative portfolio has no valid business meaning | `portfolio_value` set to `NULL`; `portfolio_flagged=1`; original value preserved in `sync_issues` |
+| Phone `+971501234568` (no spaces) | Valid UAE number, missing formatting | Normalized to `+971 50 123 4568`; original kept in `phone_raw` |
+
+**On missing values:** fields like phone and portfolio that are simply absent are stored
+as `NULL`. Inventing a value we do not have would be worse than leaving it blank --
+it would introduce false data into the CRM with no way to distinguish it from a real value.
 
 ---
 
 ## Database schema
 
-Three tables in `crm.db`:
-
-**clients** -- the main record store
+**clients** -- clean client records
 
 | Column | Type | Notes |
 |--------|------|-------|
 | `client_id` | INTEGER PK | |
-| `first_name`, `last_name` | TEXT | |
+| `first_name`, `last_name` | TEXT NOT NULL | |
 | `email` | TEXT | |
-| `email_valid` | INTEGER | 0 if email failed format check |
-| `phone_raw` | TEXT | Original value from CSV |
-| `phone` | TEXT | Normalized to +971 XX XXX XXXX |
-| `portfolio_value` | REAL | NULL if missing or unparseable |
-| `portfolio_flagged` | INTEGER | 1 if negative or suspicious |
-| `last_updated` | TEXT | YYYY-MM-DD |
-| `data_issues` | TEXT | JSON array of issue objects |
+| `email_valid` | INTEGER | `0` if email failed format check |
+| `phone_raw` | TEXT | Original value from source CSV |
+| `phone` | TEXT | Normalized to `+971 XX XXX XXXX` |
+| `portfolio_value` | REAL | `NULL` if missing or invalid |
+| `portfolio_flagged` | INTEGER | `1` if negative or suspicious |
+| `last_updated` | TEXT | `YYYY-MM-DD` |
+| `data_issues` | TEXT | JSON array of issue objects for this record |
 | `imported_at` | TEXT | Timestamp of first import |
-| `updated_at` | TEXT | Timestamp of last update |
+| `updated_at` | TEXT | Timestamp of most recent update |
 
-**sync_runs** -- one row per import run (source file, row counts, issue count)
+**sync_runs** -- one row per import run (source file, row counts, issue count, run timestamp)
 
-**sync_issues** -- one row per issue found (client_id, row number, code, detail, resolution)
-
----
-
-## Setup
-
-```bash
-# Install dependencies
-pip3 install watchdog fpdf2
-
-# Run the watcher (automatic mode)
-python3 watcher.py
-# Then drop any CSV into the watch/ folder -- sync runs automatically
-
-# Or run a one-off sync directly
-python3 sync.py path/to/client_updates.csv
-```
-
-No other dependencies. `sync.py` uses only the Python standard library.
-`watchdog` is required for `watcher.py`. `fpdf2` is only needed to regenerate `note.pdf`.
-
-To view the database, use [DB Browser for SQLite](https://sqlitebrowser.org) (free).
+**sync_issues** -- one row per issue (sync_run_id, client_id, row number, issue code, detail, resolution)
 
 ---
 
@@ -100,13 +102,38 @@ To view the database, use [DB Browser for SQLite](https://sqlitebrowser.org) (fr
 
 | File | Description |
 |------|-------------|
-| `sync.py` | Core ETL script -- validates, cleans, and upserts CSV data into SQLite |
-| `watcher.py` | File watcher -- monitors `watch/` and triggers sync automatically |
-| `generate_note.py` | Generates `note.pdf` (the submission write-up) |
-| `crm.db` | SQLite database (generated by running sync) |
-| `sync_log.txt` | Log from the most recent sync run |
-| `watcher_log.txt` | Log from the watcher process |
-| `note.pdf` | Half-page write-up covering design, security, and risks |
-| `PLAN.md` | Pre-work planning document -- issues identified before coding started |
-| `watch/` | Drop folder for incoming CSV files |
-| `archive/` | Processed CSV files (renamed with timestamp) |
+| `sync.py` | Core ETL script. Run directly: `python3 sync.py <csv_file>` |
+| `watcher.py` | File watcher for automated mode. Run: `python3 watcher.py` |
+| `generate_note.py` | Regenerates `note.pdf`. Run: `python3 generate_note.py` |
+| `requirements.txt` | Python dependencies (`watchdog`, `fpdf2`) |
+| `note.pdf` | Half-page submission write-up (design, security, risks) |
+| `sample_data/` | Sample CSV used for development and testing |
+| `PLAN.md` | Planning document written before any code -- issues catalogued upfront |
+
+Generated at runtime (not in repo):
+
+| File / Folder | Description |
+|---------------|-------------|
+| `crm.db` | SQLite database |
+| `sync_log.txt` | Log from most recent sync run |
+| `watcher_log.txt` | Log from watcher process |
+| `watch/` | Drop folder (created automatically by watcher.py) |
+| `archive/` | Processed CSVs with timestamps (created automatically) |
+
+---
+
+## What I would add with more time
+
+- **Exact column name validation** -- the current check catches missing columns but
+  a renamed column with the same count would slip through. A strict name match would
+  close this gap.
+- **Email correction heuristics** -- for an address like `mateo.garcia@example`, a
+  domain lookup could suggest likely completions rather than just flagging it.
+- **Alerting on sync_issues patterns** -- if the same issue code appears across multiple
+  consecutive runs, that is a signal the source data has a systemic problem. An alert
+  (email or Slack) would surface it without waiting for a weekly manual review.
+- **Config file** -- folder paths and validation rules are currently hardcoded. Moving
+  them to a YAML config file would make the script reusable across different CRM feeds
+  without touching code.
+- **Tests** -- unit tests for each cleaning function and an integration test that runs
+  the full pipeline against a fixture CSV and asserts the expected database state.

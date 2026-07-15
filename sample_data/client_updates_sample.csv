@@ -1,0 +1,12 @@
+client_id,first_name,last_name,email,phone,portfolio_value,last_updated
+1001,Aisha,Rahman,aisha.rahman@example.com,+971 50 123 4567,1250000,2026-06-01
+1002,Omar,Haddad,omar.haddad@example.com,+971501234568,980000,2026-06-01
+1003,Lena,Petrova,lena.petrova@example.com,,1750000,2026-06-02
+1004,James,Okafor,james.okafor@example.com,+971 50 765 4321,"2,100,000",2026-06-02
+1005,Priya,Nair,priya.nair@example.com,+971 50 222 1188,640000,01/06/2026
+1002,Omar,Haddad,omar.haddad@example.com,+971501234568,980000,2026-06-03
+1006,Mateo,Garcia,mateo.garcia@example,+971 50 909 1212,1430000,2026-06-03
+1007,Sofia,Rossi,sofia.rossi@example.com,+971 50 333 7777,,2026-06-04
+1008,Yuki,Tanaka,yuki.tanaka@example.com,+971 50 444 5656,875000,2026-06-04
+1009,Hassan,Ali,hassan.ali@example.com,+971 50 121 3434,-50000,2026-06-05
+1010,Grace,Mwangi,grace.mwangi@example.com,+971 50 656 7878,1190000,2026-06-05
