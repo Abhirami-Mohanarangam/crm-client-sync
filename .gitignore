@@ -1,0 +1,7 @@
+crm.db
+sync_log.txt
+watcher_log.txt
+archive/
+__pycache__/
+*.pyc
+*.png
