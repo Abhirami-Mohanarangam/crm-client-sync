@@ -404,7 +404,10 @@ def deduplicate(rows, issues_log, logger):
 # Main sync
 # ---------------------------------------------------------------------------
 
-def run_sync(csv_path, logger):
+def run_sync(csv_path, logger, db_path=None):
+    if db_path is None:
+        db_path = DB_PATH
+
     run_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     logger.info("=" * 68)
     logger.info(f"SYNC START | source={os.path.basename(csv_path)} | run_at={run_at}")
@@ -418,15 +421,16 @@ def run_sync(csv_path, logger):
             raw_rows = [dict(r) for r in reader]
     except FileNotFoundError:
         logger.error(f"File not found: {csv_path}")
-        sys.exit(1)
+        raise RuntimeError(f"File not found: {csv_path}")
 
     missing_cols = EXPECTED_COLUMNS - columns
     if missing_cols:
-        logger.error(
+        msg = (
             f"CSV is missing expected column(s): {', '.join(sorted(missing_cols))}. "
             f"Aborting -- the file format may have changed."
         )
-        sys.exit(1)
+        logger.error(msg)
+        raise RuntimeError(msg)
 
     rows_read = len(raw_rows)
     logger.info(f"Read {rows_read} data rows from CSV")
@@ -505,7 +509,7 @@ def run_sync(csv_path, logger):
         })
 
     # --- Upsert into SQLite -------------------------------------------------
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     init_db(conn)
 
@@ -627,7 +631,7 @@ def run_sync(csv_path, logger):
     logger.info("SYNC COMPLETE")
     for line in summary_lines:
         logger.info(line)
-    logger.info(f"Database    : {DB_PATH}")
+    logger.info(f"Database    : {db_path}")
     logger.info(f"Log file    : {LOG_PATH}")
     logger.info("=" * 68)
 
@@ -642,4 +646,7 @@ if __name__ == '__main__':
         sys.exit(1)
 
     log = setup_logging()
-    run_sync(sys.argv[1], log)
+    try:
+        run_sync(sys.argv[1], log)
+    except RuntimeError:
+        sys.exit(1)

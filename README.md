@@ -7,12 +7,25 @@ sync automatically the moment a new CSV lands in the drop folder.
 
 ---
 
-## Quick start
+## Try it online
+
+A live demo is deployed at:
+**https://crm-client-sync.streamlit.app**
+
+Upload `sample_data/client_updates_sample.csv` (included in this repo) to see
+the full pipeline run in your browser with no setup required.
+
+---
+
+## Quick start (local)
 
 ```bash
 git clone https://github.com/Abhirami-Mohanarangam/crm-client-sync.git
 cd crm-client-sync
 pip install -r requirements.txt
+
+# Web UI -- upload a CSV and see results in the browser
+streamlit run app.py
 
 # One-off sync against the included sample file
 python3 sync.py sample_data/client_updates_sample.csv
@@ -21,8 +34,8 @@ python3 sync.py sample_data/client_updates_sample.csv
 python3 watcher.py
 ```
 
-After running `sync.py` you will have:
-- `crm.db` -- SQLite database with 10 cleaned client records
+After running `sync.py` or `watcher.py` you will have:
+- `crm.db` -- SQLite database with cleaned client records
 - `sync_log.txt` -- timestamped log of every issue found and every action taken
 
 Open `crm.db` with [DB Browser for SQLite](https://sqlitebrowser.org) (free) to
@@ -102,10 +115,11 @@ it would introduce false data into the CRM with no way to distinguish it from a 
 
 | File | Description |
 |------|-------------|
+| `app.py` | Streamlit web UI. Run: `streamlit run app.py` |
 | `sync.py` | Core ETL script. Run directly: `python3 sync.py <csv_file>` |
 | `watcher.py` | File watcher for automated mode. Run: `python3 watcher.py` |
 | `generate_note.py` | Regenerates `note.pdf`. Run: `python3 generate_note.py` |
-| `requirements.txt` | Python dependencies (`watchdog`, `fpdf2`) |
+| `requirements.txt` | Python dependencies (`watchdog`, `fpdf2`, `streamlit`, `pandas`) |
 | `note.pdf` | Half-page submission write-up (design, security, risks) |
 | `sample_data/` | Sample CSV used for development and testing |
 | `PLAN.md` | Planning document written before any code -- issues catalogued upfront |
