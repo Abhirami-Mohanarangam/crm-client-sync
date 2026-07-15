@@ -17,16 +17,20 @@ SECTIONS = [
         "heading": "How it works",
         "body": (
             "A Python script (sync.py) reads the incoming CSV, validates and cleans each row, "
-            "and upserts records into a local SQLite database (crm.db) in one command. It "
-            "handles eight data quality issues found in the sample: duplicate client IDs "
-            "(keeps the most recently updated record), inconsistent date formats (normalizes "
-            "to YYYY-MM-DD), comma-formatted numbers, invalid emails (flagged, not rejected), "
-            "missing phone numbers, missing portfolio values, a negative portfolio value of "
-            "-50,000 (flagged for review -- every other value in the file is between 640,000 "
-            "and 2,100,000, so this is almost certainly a sign flip), and inconsistent UAE "
-            "phone formatting (all normalized to +971 XX XXX XXXX). Every issue is logged to "
-            "sync_log.txt and stored in a sync_issues table alongside a sync_runs audit row "
-            "for each run."
+            "and upserts records into a local SQLite database (crm.db) in one command. "
+            "watcher.py monitors a drop folder and triggers the sync automatically whenever "
+            "a new CSV file arrives, then archives the processed file with a timestamp.\n\n"
+            "Eight data quality issues in the sample are detected and cleaned: duplicate "
+            "client IDs (keep the most recently updated record), inconsistent date formats "
+            "(normalize to YYYY-MM-DD), comma-formatted numbers (strip and parse as numeric), "
+            "invalid email addresses (stored with email_valid=0 so they cannot be used "
+            "downstream), missing phone numbers and portfolio values (stored as NULL), "
+            "a negative portfolio value of -50,000 (NULLed out -- all other values in the "
+            "file are between 640,000 and 2,100,000, so this is clearly a manual entry error; "
+            "storing it would corrupt any average or sum calculation), and inconsistent UAE "
+            "phone formatting (normalized to +971 XX XXX XXXX). Original bad values are "
+            "preserved in sync_issues for audit. Every run also writes to sync_log.txt and "
+            "a sync_runs table."
         ),
     },
     {

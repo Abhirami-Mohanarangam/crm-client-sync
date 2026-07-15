@@ -259,8 +259,11 @@ def normalize_phone(raw, row_num, client_id, issues, logger):
 def parse_portfolio(raw, row_num, client_id, all_values_context, issues, logger):
     """
     Parse portfolio_value: strip commas, convert to float.
-    Flags missing values (NULL) and negative values (portfolio_flagged=1).
-    Uses all_values_context (list of other numeric values) to contextualize negatives.
+    Missing values are stored as NULL.
+    Negative values are treated as invalid data (clearly a manual entry error) --
+    the bad value is NULLed out in portfolio_value so it cannot corrupt downstream
+    calculations or reports. The original raw value is preserved in the issue log.
+    Uses all_values_context to provide range context in the log message.
     """
     if not raw or not raw.strip():
         logger.warning(
@@ -301,8 +304,6 @@ def parse_portfolio(raw, row_num, client_id, all_values_context, issues, logger)
         })
         return None, False
 
-    flagged = False
-
     if amount < 0:
         other_vals = [v for v in all_values_context if v is not None and v >= 0]
         if other_vals:
@@ -317,21 +318,27 @@ def parse_portfolio(raw, row_num, client_id, all_values_context, issues, logger)
 
         logger.warning(
             f"Row {row_num} | client_id={client_id} | NEGATIVE_PORTFOLIO: "
-            f"portfolio_value is {amount:,.0f}. {range_note} "
-            f"This is likely a manual entry error (sign flip or incorrect field). "
-            f"Stored with portfolio_flagged=1 for manual review."
+            f"Raw value was {amount:,.0f}. {range_note} "
+            f"Treating as a manual entry error (sign flip or wrong field). "
+            f"Nulled out in portfolio_value to prevent downstream data corruption. "
+            f"Original value preserved in sync_issues."
         )
         issues.append({
             "code": "NEGATIVE_PORTFOLIO",
             "detail": (
-                f"portfolio_value is {amount:,.0f}. {range_note} "
-                f"Likely a manual data entry error."
+                f"portfolio_value was {amount:,.0f}. {range_note} "
+                f"A negative portfolio value is not a valid business value -- "
+                f"almost certainly a manual entry error."
             ),
-            "resolution": "Stored as-is with portfolio_flagged=1; manual review required"
+            "resolution": (
+                f"portfolio_value set to NULL and portfolio_flagged=1. "
+                f"Original raw value ({amount:,.0f}) preserved here for audit. "
+                f"Correct value must be obtained and updated manually."
+            )
         })
-        flagged = True
+        return None, True
 
-    return amount, flagged
+    return amount, False
 
 
 # ---------------------------------------------------------------------------
