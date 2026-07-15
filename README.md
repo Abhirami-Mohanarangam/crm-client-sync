@@ -7,9 +7,17 @@ sync automatically the moment a new CSV lands in the drop folder.
 
 ---
 
-## Try it -- no setup needed
+## Try it online
 
-Clone the repo and run the web UI:
+**https://crm-client-sync-ncuy45ckdda7ykcl8lr3mj.streamlit.app**
+
+Upload `sample_data/client_updates_sample.csv` (included in this repo) -- no
+installation needed. The pipeline runs in the browser and shows the cleaned
+client records and every data quality issue found.
+
+---
+
+## Run locally
 
 ```bash
 git clone https://github.com/Abhirami-Mohanarangam/crm-client-sync.git
@@ -17,10 +25,6 @@ cd crm-client-sync
 pip install -r requirements.txt
 streamlit run app.py
 ```
-
-A browser tab opens. Upload `sample_data/client_updates_sample.csv` (included in
-the repo) and you will see the cleaned client records and all data quality issues
-found during the run.
 
 ---
 
