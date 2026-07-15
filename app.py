@@ -86,11 +86,9 @@ def run_pipeline(csv_bytes: bytes, filename: str):
             """,
             conn,
         )
-        run_row = dict(
-            conn.execute(
-                "SELECT * FROM sync_runs ORDER BY id DESC LIMIT 1"
-            ).fetchone()
-        )
+        run_row = pd.read_sql_query(
+            "SELECT * FROM sync_runs ORDER BY id DESC LIMIT 1", conn
+        ).iloc[0].to_dict()
 
         conn.close()
 
