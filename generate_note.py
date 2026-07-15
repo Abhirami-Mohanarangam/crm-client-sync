@@ -144,7 +144,10 @@ def build_pdf():
          "A Python pipeline that reads a daily client update CSV, validates and "
          "cleans the data, and upserts records into a local SQLite database (crm.db). "
          "A file watcher (watcher.py) triggers the sync automatically the moment a "
-         "new CSV lands in the watch/ folder -- no manual steps, no scheduled polling.")
+         "new CSV lands in the watch/ folder -- no manual steps, no scheduled polling. "
+         "A Streamlit web app (app.py) provides a browser interface: upload a CSV, "
+         "see the cleaned records and every data quality issue found, with no local "
+         "setup required.")
 
     # ---- How it works -----------------------------------------------------
     section(pdf, "How it works")

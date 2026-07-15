@@ -7,27 +7,27 @@ sync automatically the moment a new CSV lands in the drop folder.
 
 ---
 
-## Try it online
+## Try it -- no setup needed
 
-A live demo is deployed at:
-**https://crm-client-sync.streamlit.app**
-
-Upload `sample_data/client_updates_sample.csv` (included in this repo) to see
-the full pipeline run in your browser with no setup required.
-
----
-
-## Quick start (local)
+Clone the repo and run the web UI:
 
 ```bash
 git clone https://github.com/Abhirami-Mohanarangam/crm-client-sync.git
 cd crm-client-sync
 pip install -r requirements.txt
-
-# Web UI -- upload a CSV and see results in the browser
 streamlit run app.py
+```
 
-# One-off sync against the included sample file
+A browser tab opens. Upload `sample_data/client_updates_sample.csv` (included in
+the repo) and you will see the cleaned client records and all data quality issues
+found during the run.
+
+---
+
+## Other ways to run
+
+```bash
+# One-off sync from the command line
 python3 sync.py sample_data/client_updates_sample.csv
 
 # Automated mode -- drop any CSV into watch/ and it syncs automatically
